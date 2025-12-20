@@ -1,0 +1,61 @@
+#!/bin/bash
+
+CONFIG_FILE="$HOME/.telechat_rc"
+
+# Fungsi untuk setup konfigurasi
+setup_config() {
+    echo "Konfigurasi belum ditemukan."
+    read -p "Masukkan Telegram Bot Token: " TOKEN
+    read -p "Masukkan Chat ID tujuan: " CHAT_ID
+    echo "TOKEN=\"$TOKEN\"" > "$CONFIG_FILE"
+    echo "CHAT_ID=\"$CHAT_ID\"" >> "$CONFIG_FILE"
+    echo "Konfigurasi disimpan di $CONFIG_FILE"
+}
+
+# Cek argumen
+if [ -z "$1" ]; then
+    echo "Penggunaan: telechat <path_file> [caption]"
+    echo "Contoh: telechat document.pdf 'Laporan Bulanan'"
+    exit 1
+fi
+
+if [ "$1" == "--reset" ]; then
+    rm -f "$CONFIG_FILE"
+    echo "Konfigurasi di-reset."
+    exit 0
+fi
+
+FILE_PATH="$1"
+CAPTION="$2"
+
+# Cek file exist
+if [ ! -f "$FILE_PATH" ]; then
+    echo "Error: File '$FILE_PATH' tidak ditemukan."
+    exit 1
+fi
+
+# Load config atau buat baru
+if [ ! -f "$CONFIG_FILE" ]; then
+    setup_config
+fi
+
+source "$CONFIG_FILE"
+
+echo "📤 Sedang mengirim file: '$FILE_PATH' ..."
+echo "---------------------------------------------------"
+
+# Kirim menggunakan curl dengan progress bar
+# --progress-bar: Tampilkan bar loading
+# Output response ditangkap ke variabel, progress bar tetap tampil di layar (stderr)
+RESPONSE=$(curl --progress-bar -F chat_id="$CHAT_ID" -F document=@"$FILE_PATH" -F caption="$CAPTION" "https://api.telegram.org/bot$TOKEN/sendDocument")
+
+echo "---------------------------------------------------"
+
+# Cek sukses simpel (cek apakah ada "ok":true di response JSON)
+# Menggunakan single quote di luar agar double quote di dalam terbaca sebagai string literal
+if [[ $RESPONSE == *'"ok":true'* ]]; then
+    echo "✅ SUKSES: File berhasil dikirim!"
+else
+    echo "❌ GAGAL: Terjadi kesalahan saat mengirim."
+    echo "Respon API: $RESPONSE"
+fi
