@@ -60,9 +60,9 @@ if [[ $RESPONSE == *'"ok":true'* ]]; then
     MSG_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])" 2>/dev/null)
     
     if [ ! -z "$MSG_ID" ]; then
-        # Simpan ke history (Format: MSG_ID|TIMESTAMP|FILENAME)
+        # Simpan ke history (Format: MSG_ID|TIMESTAMP|FILENAME|CHAT_ID)
         HISTORY_FILE="$HOME/.telechat_history"
-        echo "$MSG_ID|$(date +%s)|$FILE_PATH" >> "$HISTORY_FILE"
+        echo "$MSG_ID|$(date +%s)|$FILE_PATH|$CHAT_ID" >> "$HISTORY_FILE"
     fi
 else
     echo "❌ GAGAL: Terjadi kesalahan saat mengirim."

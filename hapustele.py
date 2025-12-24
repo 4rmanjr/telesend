@@ -35,22 +35,29 @@ def get_history():
             line = line.strip()
             if not line: continue
             
-            # Support format lama (spasi) dan baru (pipe |)
+            chat_id = None
+            
+            # Parsing format history
             if '|' in line:
                 parts = line.split('|')
                 msg_id = parts[0]
                 timestamp = float(parts[1])
                 filename = parts[2] if len(parts) > 2 else "Tidak diketahui"
+                # Ambil Chat ID jika ada (format baru)
+                if len(parts) > 3:
+                    chat_id = parts[3]
             else:
+                # Format legacy (spasi)
                 parts = line.split()
                 msg_id = parts[0]
                 timestamp = float(parts[1]) if len(parts) > 1 else 0
-                filename = "File Lama (Tanpa Nama)"
+                filename = "File Lama"
                 
             entries.append({
                 'id': msg_id,
                 'ts': timestamp,
-                'file': os.path.basename(filename), # Ambil nama file saja
+                'file': os.path.basename(filename),
+                'chat_id': chat_id, # Bisa None jika format lama
                 'raw_line': line
             })
     except Exception:
@@ -69,29 +76,31 @@ def delete_message(token, chat_id, message_id):
         resp = requests.post(url, json={'chat_id': chat_id, 'message_id': message_id})
         data = resp.json()
         if data.get('ok'):
-            print(f"✅ Pesan {message_id} berhasil dihapus.")
+            print(f"✅ Pesan {message_id} (Chat: {chat_id}) berhasil dihapus.")
             return True
         else:
-            print(f"⚠️  Gagal menghapus pesan {message_id}: {data.get('description')}")
-            # Jika pesan tidak ditemukan (sudah dihapus), anggap sukses agar history bersih
-            if "message to delete not found" in str(data.get('description')).lower():
+            desc = data.get('description')
+            print(f"⚠️  Gagal menghapus pesan {message_id}: {desc}")
+            if "message to delete not found" in str(desc).lower():
                 return True
             return False
     except Exception as e:
         print(f"❌ Error koneksi: {e}")
         return False
 
-def show_list(entries):
+def show_list(entries, default_chat_id):
     print("\n📜 Riwayat Pesan Terkirim:")
-    print("-" * 60)
-    print(f"{ 'ID Pesan':<15} | {'Waktu':<20} | {'Nama File'}")
-    print("-" * 60)
+    print("-" * 85)
+    print(f"{ 'ID Pesan':<10} | {'Chat ID':<15} | {'Waktu':<18} | {'Nama File'}")
+    print("-" * 85)
     
-    # Tampilkan dari yang terbaru (reverse)
     for entry in reversed(entries):
         dt = datetime.datetime.fromtimestamp(entry['ts']).strftime('%Y-%m-%d %H:%M')
-        print(f"{entry['id']:<15} | {dt:<20} | {entry['file']}")
-    print("-" * 60)
+        # Gunakan Chat ID dari history jika ada, kalau tidak pakai default config
+        display_chat_id = entry['chat_id'] if entry['chat_id'] else f"{default_chat_id} (Def)"
+        
+        print(f"{entry['id']:<10} | {display_chat_id:<15} | {dt:<18} | {entry['file']}")
+    print("-" * 85)
 
 def main():
     parser = argparse.ArgumentParser(description="Hapus pesan Telegram.")
@@ -101,14 +110,21 @@ def main():
 
     config = get_config()
     TOKEN = config.get('TOKEN')
-    CHAT_ID = config.get('CHAT_ID')
+    DEFAULT_CHAT_ID = config.get('CHAT_ID')
 
     entries = get_history()
 
+    # Fungsi helper untuk menentukan Chat ID yang dipakai
+    def resolve_chat_id(entry):
+        return entry['chat_id'] if entry['chat_id'] else DEFAULT_CHAT_ID
+
     # 1. Mode Hapus ID Spesifik (via argumen)
     if args.id:
-        if delete_message(TOKEN, CHAT_ID, args.id):
-            # Hapus dari history lokal
+        # Cari entry untuk ID ini agar tahu Chat ID-nya
+        target = next((e for e in entries if str(e['id']) == str(args.id)), None)
+        target_chat_id = resolve_chat_id(target) if target else DEFAULT_CHAT_ID
+        
+        if delete_message(TOKEN, target_chat_id, args.id):
             entries = [e for e in entries if str(e['id']) != str(args.id)]
             save_history(entries)
         return
@@ -122,9 +138,8 @@ def main():
 
         active_entries = []
         for entry in entries:
-            # Coba hapus
-            if not delete_message(TOKEN, CHAT_ID, entry['id']):
-                # Jika gagal, simpan kembali (kecuali error not found)
+            chat_id = resolve_chat_id(entry)
+            if not delete_message(TOKEN, chat_id, entry['id']):
                 active_entries.append(entry)
         
         save_history(active_entries)
@@ -132,12 +147,12 @@ def main():
             print("✅ Semua riwayat bersih.")
         return
 
-    # 3. Mode Interaktif (Default / Seamless)
+    # 3. Mode Interaktif
     if not entries:
         print("ℹ️  Belum ada riwayat pengiriman pesan.")
         return
 
-    show_list(entries)
+    show_list(entries, DEFAULT_CHAT_ID)
     
     print("\n💡 Ketik ID pesan untuk menghapus, atau 'all' untuk hapus semua.")
     choice = input("👉 Pilihan (Enter untuk batal): ").strip()
@@ -147,20 +162,16 @@ def main():
         return
 
     if choice.lower() == 'all':
-        # Re-run logic delete all
         os.system(f"{sys.argv[0]} --all")
     else:
-        # Asumsikan input adalah ID
-        # Cek apakah ID ada di list (opsional, tapi bagus untuk validasi)
         target = next((e for e in entries if str(e['id']) == choice), None)
+        target_chat_id = resolve_chat_id(target) if target else DEFAULT_CHAT_ID
         
-        if delete_message(TOKEN, CHAT_ID, choice):
-            # Hapus dari history lokal
+        if delete_message(TOKEN, target_chat_id, choice):
             new_entries = [e for e in entries if str(e['id']) != choice]
             save_history(new_entries)
         elif not target:
-            # Jika user memasukkan ID yang tidak ada di list lokal tapi ingin coba hapus
-             delete_message(TOKEN, CHAT_ID, choice)
+             delete_message(TOKEN, DEFAULT_CHAT_ID, choice)
 
 if __name__ == "__main__":
     main()
