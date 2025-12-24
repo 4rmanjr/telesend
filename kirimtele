@@ -55,6 +55,15 @@ echo "---------------------------------------------------"
 # Menggunakan single quote di luar agar double quote di dalam terbaca sebagai string literal
 if [[ $RESPONSE == *'"ok":true'* ]]; then
     echo "✅ SUKSES: File berhasil dikirim!"
+    
+    # Ambil Message ID untuk keperluan fitur delete
+    MSG_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])" 2>/dev/null)
+    
+    if [ ! -z "$MSG_ID" ]; then
+        # Simpan ke history (Format: MSG_ID|TIMESTAMP|FILENAME)
+        HISTORY_FILE="$HOME/.telechat_history"
+        echo "$MSG_ID|$(date +%s)|$FILE_PATH" >> "$HISTORY_FILE"
+    fi
 else
     echo "❌ GAGAL: Terjadi kesalahan saat mengirim."
     echo "Respon API: $RESPONSE"
