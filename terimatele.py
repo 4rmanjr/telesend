@@ -115,7 +115,9 @@ def main():
                         print("   ❌ Gagal mengambil path file.")
         
         except KeyboardInterrupt:
-            print("\nBerhenti.")
+            print("\n🛑 Berhenti.")
+            print("\n💡 Tips: Mau membalas/mengirim file? Gunakan perintah:")
+            print("   \033[1;33mkirimtele <nama_file>\033[0m")
             break
         except Exception as e:
             print(f"Error: {e}")

@@ -170,6 +170,7 @@ def main():
         if delete_message(TOKEN, target_chat_id, choice):
             new_entries = [e for e in entries if str(e['id']) != choice]
             save_history(new_entries)
+            print("\n💡 Tips: File terhapus. Mau kirim revisi? Ketik \033[1;33mkirimtele <file>\033[0m")
         elif not target:
              delete_message(TOKEN, DEFAULT_CHAT_ID, choice)
 

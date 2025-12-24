@@ -64,6 +64,9 @@ if [[ $RESPONSE == *'"ok":true'* ]]; then
         HISTORY_FILE="$HOME/.telechat_history"
         echo "$MSG_ID|$(date +%s)|$FILE_PATH|$CHAT_ID" >> "$HISTORY_FILE"
     fi
+    
+    # Contextual Hint
+    echo -e "\n💡 Tips: Salah kirim? Ketik \033[1;33mhapustele\033[0m untuk menghapus pesan ini."
 else
     echo "❌ GAGAL: Terjadi kesalahan saat mengirim."
     echo "Respon API: $RESPONSE"
