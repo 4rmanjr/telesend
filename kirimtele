@@ -1,23 +1,28 @@
 #!/bin/bash
 
-CONFIG_FILE="$HOME/.telechat_rc"
+# Mendapatkan lokasi direktori asli script (resolve symlink)
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
-# Fungsi untuk setup konfigurasi
+CONFIG_FILE="$SCRIPT_DIR/config"
+
+# Fungsi untuk setup konfigurasi (jika config kosong/belum diedit)
 setup_config() {
-    echo "Konfigurasi belum ditemukan."
+    echo "⚠️  Konfigurasi belum diatur di file 'config'."
     read -p "Masukkan Telegram Bot Token: " TOKEN
     read -p "Masukkan Chat ID tujuan: " CHAT_ID
+    
+    # Update file config
+    # Menggunakan sed untuk mengganti placeholder atau isi file
     echo "TOKEN=\"$TOKEN\"" > "$CONFIG_FILE"
     echo "CHAT_ID=\"$CHAT_ID\"" >> "$CONFIG_FILE"
-    echo "Konfigurasi disimpan di $CONFIG_FILE"
+    echo "✅ Konfigurasi disimpan di $CONFIG_FILE"
 }
-
-# Cek argumen
-if [ -z "$1" ]; then
-    echo "Penggunaan: telechat <path_file> [caption]"
-    echo "Contoh: telechat document.pdf 'Laporan Bulanan'"
-    exit 1
-fi
 
 if [ "$1" == "--reset" ]; then
     rm -f "$CONFIG_FILE"
@@ -28,18 +33,30 @@ fi
 FILE_PATH="$1"
 CAPTION="$2"
 
+# Jika tidak ada argumen, minta input (Drag & Drop friendly)
+if [ -z "$FILE_PATH" ]; then
+    echo "💡 Tips: Anda bisa Drag & Drop file ke terminal sekarang."
+    read -p "📂 Masukkan path file: " FILE_PATH
+    # Hapus tanda kutip tunggal/ganda (hasil drag & drop beberapa terminal)
+    FILE_PATH=$(echo "$FILE_PATH" | tr -d "'\"")
+fi
+
 # Cek file exist
 if [ ! -f "$FILE_PATH" ]; then
     echo "Error: File '$FILE_PATH' tidak ditemukan."
     exit 1
 fi
 
-# Load config atau buat baru
-if [ ! -f "$CONFIG_FILE" ]; then
-    setup_config
+# Load config
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
 fi
 
-source "$CONFIG_FILE"
+# Cek apakah config masih default/kosong
+if [ -z "$TOKEN" ] || [[ "$TOKEN" == *"GANTI_DENGAN"* ]]; then
+    setup_config
+    source "$CONFIG_FILE"
+fi
 
 echo "📤 Sedang mengirim file: '$FILE_PATH' ..."
 echo "---------------------------------------------------"

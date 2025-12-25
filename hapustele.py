@@ -5,21 +5,29 @@ import requests
 import argparse
 import datetime
 
-# Lokasi config
-CONFIG_FILE = os.path.expanduser("~/.telechat_rc")
+# Lokasi config (relative terhadap lokasi script asli)
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+CONFIG_FILE = os.path.join(SCRIPT_DIR, "config")
 HISTORY_FILE = os.path.expanduser("~/.telechat_history")
 
 def get_config():
     if not os.path.exists(CONFIG_FILE):
-        print("❌ Konfigurasi belum ditemukan.")
+        print(f"❌ File konfigurasi tidak ditemukan di: {CONFIG_FILE}")
         sys.exit(1)
     
     config = {}
     with open(CONFIG_FILE, 'r') as f:
         for line in f:
-            if '=' in line:
-                key, value = line.strip().split('=', 1)
-                config[key] = value.replace('"', '')
+            line = line.strip()
+            if '=' in line and not line.startswith('#'):
+                key, value = line.split('=', 1)
+                config[key] = value.replace('"', '').replace("'", "")
+    
+    if "GANTI_DENGAN" in config.get('TOKEN', ''):
+        print("❌ Konfigurasi belum diisi.")
+        print(f"👉 Silakan edit file: {CONFIG_FILE}")
+        sys.exit(1)
+
     return config
 
 def get_history():

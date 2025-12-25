@@ -5,21 +5,29 @@ import requests
 import json
 import datetime
 
-# Lokasi config yang sama dengan kirimtele
-CONFIG_FILE = os.path.expanduser("~/.telechat_rc")
+# Lokasi config (relative terhadap lokasi script asli)
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+CONFIG_FILE = os.path.join(SCRIPT_DIR, "config")
 
 def get_config():
     if not os.path.exists(CONFIG_FILE):
-        print("❌ Konfigurasi belum ditemukan. Jalankan 'kirimtele' dulu untuk setup.")
+        print(f"❌ File konfigurasi tidak ditemukan di: {CONFIG_FILE}")
         exit(1)
     
     config = {}
     with open(CONFIG_FILE, 'r') as f:
         for line in f:
-            if '=' in line:
-                key, value = line.strip().split('=', 1)
+            line = line.strip()
+            if '=' in line and not line.startswith('#'):
+                key, value = line.split('=', 1)
                 # Hapus tanda kutip " dari value
-                config[key] = value.replace('"', '')
+                config[key] = value.replace('"', '').replace("'", "")
+    
+    if "GANTI_DENGAN" in config.get('TOKEN', ''):
+        print("❌ Konfigurasi belum diisi.")
+        print(f"👉 Silakan edit file: {CONFIG_FILE}")
+        exit(1)
+        
     return config
 
 def main():
