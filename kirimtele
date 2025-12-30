@@ -31,47 +31,83 @@ if [ "$1" == "--reset" ]; then
 fi
 
 FILE_PATH="$1"
-CAPTION="$2"
 
-# Jika tidak ada argumen, minta input (Drag & Drop friendly)
-if [ -z "$FILE_PATH" ]; then
-    echo "💡 Tips: Anda bisa Drag & Drop file ke terminal sekarang."
-    read -p "📂 Masukkan path file: " FILE_PATH
-    # Hapus tanda kutip tunggal/ganda (hasil drag & drop beberapa terminal)
-    FILE_PATH=$(echo "$FILE_PATH" | tr -d "'\"")
+# Cek apakah argumen pertama adalah file
+if [ -f "$FILE_PATH" ]; then
+    # Mode Kirim File dengan Caption
+    shift
+    CAPTION="$*"
+    
+    # Load config
+    if [ -f "$CONFIG_FILE" ]; then
+        source "$CONFIG_FILE"
+    fi
+
+    # Cek apakah config masih default/kosong
+    if [ -z "$TOKEN" ] || [[ "$TOKEN" == *"GANTI_DENGAN"* ]]; then
+        setup_config
+        source "$CONFIG_FILE"
+    fi
+
+    echo "📤 Sedang mengirim file: '$FILE_PATH' ..."
+    [ ! -z "$CAPTION" ] && echo "💬 Caption: $CAPTION"
+    echo "---------------------------------------------------"
+
+    RESPONSE=$(curl --progress-bar -F chat_id="$CHAT_ID" -F document=@"$FILE_PATH" -F caption="$CAPTION" "https://api.telegram.org/bot$TOKEN/sendDocument")
+else
+    # Jika tidak ada argumen sama sekali, minta input file (perilaku lama)
+    if [ -z "$FILE_PATH" ]; then
+        echo "💡 Tips: Anda bisa Drag & Drop file ke terminal sekarang."
+        read -p "📂 Masukkan path file (atau ketik pesan): " INPUT
+        INPUT=$(echo "$INPUT" | tr -d "'\"")
+        
+        if [ -f "$INPUT" ]; then
+            FILE_PATH="$INPUT"
+            # Lanjut ke pengiriman file (tanpa caption karena interaktif)
+            CAPTION=""
+        else
+            # Input manual bukan file, anggap pesan teks
+            MESSAGE="$INPUT"
+            FILE_PATH="[TEXT]"
+        fi
+    else
+        # Argumen ada tapi bukan file, anggap pesan teks
+        MESSAGE="$*"
+        FILE_PATH="[TEXT]"
+    fi
+
+    # Load config
+    if [ -f "$CONFIG_FILE" ]; then
+        source "$CONFIG_FILE"
+    fi
+
+    # Cek apakah config masih default/kosong
+    if [ -z "$TOKEN" ] || [[ "$TOKEN" == *"GANTI_DENGAN"* ]]; then
+        setup_config
+        source "$CONFIG_FILE"
+    fi
+
+    if [ "$FILE_PATH" == "[TEXT]" ]; then
+        echo "📤 Sedang mengirim pesan teks ..."
+        echo "---------------------------------------------------"
+        RESPONSE=$(curl -s -F chat_id="$CHAT_ID" -F text="$MESSAGE" "https://api.telegram.org/bot$TOKEN/sendMessage")
+    else
+        echo "📤 Sedang mengirim file: '$FILE_PATH' ..."
+        echo "---------------------------------------------------"
+        RESPONSE=$(curl --progress-bar -F chat_id="$CHAT_ID" -F document=@"$FILE_PATH" "https://api.telegram.org/bot$TOKEN/sendDocument")
+    fi
 fi
-
-# Cek file exist
-if [ ! -f "$FILE_PATH" ]; then
-    echo "Error: File '$FILE_PATH' tidak ditemukan."
-    exit 1
-fi
-
-# Load config
-if [ -f "$CONFIG_FILE" ]; then
-    source "$CONFIG_FILE"
-fi
-
-# Cek apakah config masih default/kosong
-if [ -z "$TOKEN" ] || [[ "$TOKEN" == *"GANTI_DENGAN"* ]]; then
-    setup_config
-    source "$CONFIG_FILE"
-fi
-
-echo "📤 Sedang mengirim file: '$FILE_PATH' ..."
-echo "---------------------------------------------------"
-
-# Kirim menggunakan curl dengan progress bar
-# --progress-bar: Tampilkan bar loading
-# Output response ditangkap ke variabel, progress bar tetap tampil di layar (stderr)
-RESPONSE=$(curl --progress-bar -F chat_id="$CHAT_ID" -F document=@"$FILE_PATH" -F caption="$CAPTION" "https://api.telegram.org/bot$TOKEN/sendDocument")
 
 echo "---------------------------------------------------"
 
 # Cek sukses simpel (cek apakah ada "ok":true di response JSON)
 # Menggunakan single quote di luar agar double quote di dalam terbaca sebagai string literal
 if [[ $RESPONSE == *'"ok":true'* ]]; then
-    echo "✅ SUKSES: File berhasil dikirim!"
+    if [ "$FILE_PATH" == "[TEXT]" ]; then
+        echo "✅ SUKSES: Pesan berhasil dikirim!"
+    else
+        echo "✅ SUKSES: File berhasil dikirim!"
+    fi
     
     # Ambil Message ID untuk keperluan fitur delete
     MSG_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])" 2>/dev/null)
