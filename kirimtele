@@ -11,14 +11,12 @@ SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
 CONFIG_FILE="$SCRIPT_DIR/config"
 
-# Fungsi untuk setup konfigurasi (jika config kosong/belum diedit)
+# Fungsi untuk setup konfigurasi
 setup_config() {
     echo "⚠️  Konfigurasi belum diatur di file 'config'."
     read -p "Masukkan Telegram Bot Token: " TOKEN
     read -p "Masukkan Chat ID tujuan: " CHAT_ID
     
-    # Update file config
-    # Menggunakan sed untuk mengganti placeholder atau isi file
     echo "TOKEN=\"$TOKEN\"" > "$CONFIG_FILE"
     echo "CHAT_ID=\"$CHAT_ID\"" >> "$CONFIG_FILE"
     echo "✅ Konfigurasi disimpan di $CONFIG_FILE"
@@ -30,97 +28,202 @@ if [ "$1" == "--reset" ]; then
     exit 0
 fi
 
-FILE_PATH="$1"
+# Load config
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+fi
 
-# Cek apakah argumen pertama adalah file
-if [ -f "$FILE_PATH" ]; then
-    # Mode Kirim File dengan Caption
-    shift
-    CAPTION="$*"
-    
-    # Load config
-    if [ -f "$CONFIG_FILE" ]; then
-        source "$CONFIG_FILE"
-    fi
+# Cek config
+if [ -z "$TOKEN" ] || [[ "$TOKEN" == *"GANTI_DENGAN"* ]]; then
+    setup_config
+    source "$CONFIG_FILE"
+fi
 
-    # Cek apakah config masih default/kosong
-    if [ -z "$TOKEN" ] || [[ "$TOKEN" == *"GANTI_DENGAN"* ]]; then
-        setup_config
-        source "$CONFIG_FILE"
-    fi
+# Variabel State
+MODE="TEXT"
+FILES_TO_SEND=()
+MESSAGE=""
+CAPTION=""
 
-    echo "📤 Sedang mengirim file: '$FILE_PATH' ..."
-    [ ! -z "$CAPTION" ] && echo "💬 Caption: $CAPTION"
-    echo "---------------------------------------------------"
+# -------------------------------------------------------------
+# LOGIC PARSING ARGUMEN
+# -------------------------------------------------------------
 
-    RESPONSE=$(curl --progress-bar -F chat_id="$CHAT_ID" -F document=@"$FILE_PATH" -F caption="$CAPTION" "https://api.telegram.org/bot$TOKEN/sendDocument")
-else
-    # Jika tidak ada argumen sama sekali, minta input file (perilaku lama)
-    if [ -z "$FILE_PATH" ]; then
-        echo "💡 Tips: Anda bisa Drag & Drop file ke terminal sekarang."
-        read -p "📂 Masukkan path file (atau ketik pesan): " INPUT
-        INPUT=$(echo "$INPUT" | tr -d "'\"")
-        
-        if [ -f "$INPUT" ]; then
-            FILE_PATH="$INPUT"
-            # Lanjut ke pengiriman file (tanpa caption karena interaktif)
-            CAPTION=""
-        else
-            # Input manual bukan file, anggap pesan teks
-            MESSAGE="$INPUT"
-            FILE_PATH="[TEXT]"
-        fi
+# Jika ada argumen command line
+if [ -n "$1" ]; then
+    if [ -f "$1" ]; then
+        MODE="SINGLE_FILE"
+        FILES_TO_SEND=("$1")
+        shift
+        CAPTION="$*"
     else
-        # Argumen ada tapi bukan file, anggap pesan teks
+        MODE="TEXT"
         MESSAGE="$*"
-        FILE_PATH="[TEXT]"
     fi
-
-    # Load config
-    if [ -f "$CONFIG_FILE" ]; then
-        source "$CONFIG_FILE"
-    fi
-
-    # Cek apakah config masih default/kosong
-    if [ -z "$TOKEN" ] || [[ "$TOKEN" == *"GANTI_DENGAN"* ]]; then
-        setup_config
-        source "$CONFIG_FILE"
-    fi
-
-    if [ "$FILE_PATH" == "[TEXT]" ]; then
-        echo "📤 Sedang mengirim pesan teks ..."
-        echo "---------------------------------------------------"
-        RESPONSE=$(curl -s -F chat_id="$CHAT_ID" -F text="$MESSAGE" "https://api.telegram.org/bot$TOKEN/sendMessage")
-    else
-        echo "📤 Sedang mengirim file: '$FILE_PATH' ..."
-        echo "---------------------------------------------------"
-        RESPONSE=$(curl --progress-bar -F chat_id="$CHAT_ID" -F document=@"$FILE_PATH" "https://api.telegram.org/bot$TOKEN/sendDocument")
-    fi
-fi
-
-echo "---------------------------------------------------"
-
-# Cek sukses simpel (cek apakah ada "ok":true di response JSON)
-# Menggunakan single quote di luar agar double quote di dalam terbaca sebagai string literal
-if [[ $RESPONSE == *'"ok":true'* ]]; then
-    if [ "$FILE_PATH" == "[TEXT]" ]; then
-        echo "✅ SUKSES: Pesan berhasil dikirim!"
-    else
-        echo "✅ SUKSES: File berhasil dikirim!"
-    fi
-    
-    # Ambil Message ID untuk keperluan fitur delete
-    MSG_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['result']['message_id'])" 2>/dev/null)
-    
-    if [ ! -z "$MSG_ID" ]; then
-        # Simpan ke history (Format: MSG_ID|TIMESTAMP|FILENAME|CHAT_ID)
-        HISTORY_FILE="$HOME/.telechat_history"
-        echo "$MSG_ID|$(date +%s)|$FILE_PATH|$CHAT_ID" >> "$HISTORY_FILE"
-    fi
-    
-    # Contextual Hint
-    echo -e "\n💡 Tips: Salah kirim? Ketik \033[1;33mhapustele\033[0m untuk menghapus pesan ini."
 else
-    echo "❌ GAGAL: Terjadi kesalahan saat mengirim."
-    echo "Respon API: $RESPONSE"
+    # Jika tidak ada argumen, masuk mode interaktif
+    echo "💡 Tips: Anda bisa Drag & Drop file ke terminal sekarang."
+    echo "   (Anda juga bisa menambahkan komentar/caption setelah file)"
+    read -p "📂 Masukkan path file (atau ketik pesan): " INPUT
+    
+    # Gunakan Python untuk parsing input agar aman terhadap quotes (Drag & Drop)
+    PYTHON_PARSER="
+import sys, shlex, os
+
+try:
+    input_str = sys.argv[1]
+    tokens = shlex.split(input_str)
+    
+    if not tokens:
+        print('TEXT')
+        sys.exit(0)
+
+    files = []
+    others = []
+    
+    for t in tokens:
+        # Cek apakah token adalah file valid
+        if os.path.isfile(t):
+            files.append(t)
+        else:
+            others.append(t)
+    
+    if not files:
+        # Tidak ada file ditemukan, anggap semua text
+        print('TEXT')
+    else:
+        # Ada file, pisahkan file dan caption
+        print('FILES_WITH_CAPTION')
+        for f in files:
+            print(f)
+        print('---END_OF_FILES---')
+        # Gabungkan sisa token menjadi caption
+        print(' '.join(others))
+
+except Exception:
+    # Fallback jika parsing error
+    print('TEXT')
+"
+    # Jalankan parser
+    PARSED_OUTPUT=$(python3 -c "$PYTHON_PARSER" "$INPUT")
+    
+    # Baca baris pertama untuk tipe
+    DETECTED_TYPE=$(echo "$PARSED_OUTPUT" | head -n 1)
+    
+    if [ "$DETECTED_TYPE" == "FILES_WITH_CAPTION" ]; then
+        MODE="MULTI_FILES"
+        STATE="FILES"
+        
+        # Loop output python baris per baris (skip baris pertama)
+        while IFS= read -r line; do
+            # Skip baris pertama (TYPE)
+            [[ "$line" == "FILES_WITH_CAPTION" ]] && continue
+            
+            if [ "$STATE" == "FILES" ]; then
+                if [ "$line" == "---END_OF_FILES---" ]; then
+                    STATE="CAPTION"
+                    continue
+                fi
+                FILES_TO_SEND+=("$line")
+            elif [ "$STATE" == "CAPTION" ]; then
+                if [ -z "$CAPTION" ]; then
+                    CAPTION="$line"
+                else
+                    CAPTION="$CAPTION"$'
+'"$line"
+                fi
+            fi
+        done <<< "$PARSED_OUTPUT"
+        
+    else
+        MODE="TEXT"
+        MESSAGE="$INPUT"
+    fi
 fi
+
+# -------------------------------------------------------------
+# FUNGSI PENGIRIMAN
+# -------------------------------------------------------------
+
+send_text() {
+    local txt="$1"
+    echo "📤 Sedang mengirim pesan teks ..."
+    echo "---------------------------------------------------"
+    curl -s -F chat_id="$CHAT_ID" -F text="$txt" "https://api.telegram.org/bot$TOKEN/sendMessage"
+}
+
+send_file() {
+    local fpath="$1"
+    local capt="$2"
+    echo "📤 Sedang mengirim file: '$fpath' ..."
+    [ -n "$capt" ] && echo "💬 Caption: $capt"
+    echo "---------------------------------------------------"
+    
+    if [ -n "$capt" ]; then
+        curl --progress-bar -F chat_id="$CHAT_ID" -F document=@"$fpath" -F caption="$capt" "https://api.telegram.org/bot$TOKEN/sendDocument"
+    else
+        curl --progress-bar -F chat_id="$CHAT_ID" -F document=@"$fpath" "https://api.telegram.org/bot$TOKEN/sendDocument"
+    fi
+}
+
+save_to_history() {
+    local response="$1"
+    local filename="$2"
+    
+    # Ambil Message ID
+    MSG_ID=$(echo "$response" | python3 -c "import sys, json; print(json.load(sys.stdin).get('result', {}).get('message_id', ''))" 2>/dev/null)
+    
+    if [ -n "$MSG_ID" ]; then
+        # Sanitize filename (ganti | dengan _ agar tidak merusak format history)
+        safe_filename=$(echo "$filename" | tr '|' '_')
+        HISTORY_FILE="$HOME/.telechat_history"
+        echo "$MSG_ID|$(date +%s)|$safe_filename|$CHAT_ID" >> "$HISTORY_FILE"
+    fi
+}
+
+# -------------------------------------------------------------
+# EKSEKUSI PENGIRIMAN
+# -------------------------------------------------------------
+
+if [ "$MODE" == "TEXT" ]; then
+    RESPONSE=$(send_text "$MESSAGE")
+    if [[ $RESPONSE == *'"ok":true'* ]]; then
+        echo "✅ SUKSES: Pesan berhasil dikirim!"
+        save_to_history "$RESPONSE" "[TEXT] $MESSAGE"
+    else
+        echo "❌ GAGAL: $RESPONSE"
+    fi
+
+elif [ "$MODE" == "SINGLE_FILE" ]; then
+    RESPONSE=$(send_file "${FILES_TO_SEND[0]}" "$CAPTION")
+    if [[ $RESPONSE == *'"ok":true'* ]]; then
+        echo "✅ SUKSES: File berhasil dikirim!"
+        save_to_history "$RESPONSE" "${FILES_TO_SEND[0]}"
+    else
+        echo "❌ GAGAL: $RESPONSE"
+    fi
+
+elif [ "$MODE" == "MULTI_FILES" ]; then
+    count=0
+    for f in "${FILES_TO_SEND[@]}"; do
+        # Kirim caption HANYA pada file pertama
+        if [ $count -eq 0 ]; then
+            CURRENT_CAPTION="$CAPTION"
+        else
+            CURRENT_CAPTION=""
+        fi
+        
+        RESPONSE=$(send_file "$f" "$CURRENT_CAPTION")
+        
+        if [[ $RESPONSE == *'"ok":true'* ]]; then
+            echo "✅ SUKSES: File '$(basename "$f")' berhasil dikirim!"
+            save_to_history "$RESPONSE" "$f"
+        else
+            echo "❌ GAGAL kirim '$f': $RESPONSE"
+        fi
+        echo "---------------------------------------------------"
+        count=$((count+1))
+    done
+fi
+
+echo -e "\n💡 Tips: Salah kirim? Ketik \033[1;33mhapustele\033[0m untuk menghapus pesan ini."
