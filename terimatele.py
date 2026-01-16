@@ -89,19 +89,21 @@ def main():
                 file_name = None
                 
                 # Deteksi tipe file
+                msg_id = message.get('message_id', 'unknown')
+                
                 if 'document' in message:
                     file_id = message['document']['file_id']
-                    file_name = message['document'].get('file_name', 'dokumen_tanpa_nama')
+                    file_name = message['document'].get('file_name', f"doc_{msg_id}_{int(time.time())}")
                     print(f"📄 Mendeteksi Dokumen: {file_name}")
                 
                 elif 'photo' in message:
                     file_id = message['photo'][-1]['file_id'] # Ambil resolusi tertinggi
-                    file_name = f"photo_{int(time.time())}.jpg"
+                    file_name = f"photo_{msg_id}_{int(time.time())}.jpg"
                     print(f"🖼️  Mendeteksi Foto")
                 
                 elif 'video' in message:
                     file_id = message['video']['file_id']
-                    file_name = message['video'].get('file_name', f"video_{int(time.time())}.mp4")
+                    file_name = message['video'].get('file_name', f"video_{msg_id}_{int(time.time())}.mp4")
                     print(f"🎥 Mendeteksi Video")
 
                 # Proses Download
