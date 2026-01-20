@@ -1,26 +1,36 @@
 # Telesend 🚀
 
-**Telesend** adalah kumpulan alat CLI (Command Line Interface) sederhana namun powerful untuk mengirim dan menerima file antara Laptop/PC (Linux) dan Telegram.
+**Telesend** adalah kumpulan alat CLI (Command Line Interface) cerdas dan efisien untuk manajemen file antara Laptop/PC (Linux) dan Telegram.
 
 Project ini terdiri dari tiga alat utama:
-1. **`kirimtele`**: Script Bash ringan untuk mengirim file ke Telegram dengan progress bar.
-2. **`terimatele`**: Script Python cerdas untuk menerima file dari Telegram secara otomatis (Live Mode).
-3. **`hapustele`**: Script Python interaktif untuk menghapus pesan/file yang telah dikirim oleh bot.
+1. **`kirimtele`**: Script Bash hybrid (Bash + Python) untuk mengirim file atau pesan teks. Mendukung **Drag & Drop** dan pengiriman massal (bulk).
+2. **`terimatele`**: Script Python pintar untuk menerima file dari Telegram secara otomatis (Live Mode).
+3. **`hapustele`**: Script Python interaktif untuk mengelola dan menghapus pesan/file yang telah dikirim.
 
-## ✨ Fitur
+## ✨ Fitur Unggulan
 
-*   **Tanpa Login Rumit**: Hanya butuh Bot Token & Chat ID.
-*   **Progress Bar**: Tampilan visual saat mengupload file besar.
-*   **Live Receiver**: `terimatele` hanya mendownload file yang masuk *setelah* script dijalankan.
-*   **Message Deletion**: Hapus pesan tertentu atau semua pesan yang dikirim bot dengan sistem riwayat terintegrasi.
-*   **Smart History**: `hapustele` mencatat nama file, waktu, dan Chat ID untuk memudahkan pengelolaan pesan.
-*   **Global Access**: Bisa dipanggil dari folder mana saja di terminal.
+### 📤 Kirimtele
+*   **Drag & Drop Support**: Cukup drag file (satu atau banyak) ke terminal untuk mengirim.
+*   **Bulk Sender**: Kirim banyak file sekaligus dalam satu perintah.
+*   **Smart Parsing**: Mendukung input campuran (File + Caption) saat drag & drop.
+*   **Text & Files**: Bisa mengirim file dokumen, foto, video, atau hanya sekadar pesan teks.
+*   **Progress Bar**: Visualisasi proses upload.
+
+### 📥 Terimatele
+*   **Live Receiver**: Hanya mendownload file yang masuk *setelah* script dijalankan (bebas spam file lama).
+*   **Auto Filter**: Hanya menerima file dari Chat ID terdaftar (aman dari orang asing).
+*   **Support Berbagai Tipe**: Dokumen, Foto, dan Video.
+
+### 🗑️ Hapustele
+*   **Interactive Menu**: Tampilan riwayat pesan yang user-friendly.
+*   **Bulk Delete**: Hapus banyak pesan sekaligus (pisahkan ID dengan spasi).
+*   **Smart History**: Mencatat riwayat pengiriman lokal untuk memudahkan penghapusan tanpa mencari Message ID manual.
 
 ## 🛠️ Prasyarat
 
 *   OS: Linux / macOS (dengan Bash)
 *   `curl` (untuk kirimtele)
-*   `python3` (untuk terimatele & hapustele)
+*   `python3` (untuk parsing, terimatele & hapustele)
 *   Library Python `requests`:
     ```bash
     pip install requests
@@ -35,9 +45,8 @@ Project ini terdiri dari tiga alat utama:
    ```
 
 2. **Jadikan Global Command (Disarankan)**
-   Pilih salah satu metode di bawah ini agar bisa dipanggil langsung dari terminal:
+   Agar bisa dipanggil dari mana saja:
 
-   **Metode A (User Local - Tanpa Sudo):**
    ```bash
    mkdir -p ~/.local/bin
    ln -sf "$(pwd)/kirimtele" ~/.local/bin/kirimtele
@@ -45,65 +54,77 @@ Project ini terdiri dari tiga alat utama:
    ln -sf "$(pwd)/hapustele.py" ~/.local/bin/hapustele
    chmod +x kirimtele terimatele.py hapustele.py
    ```
+   *(Pastikan `~/.local/bin` ada di PATH Anda)*
 
-   **Metode B (Sistem - Butuh Sudo):**
-   ```bash
-   sudo ln -sf "$(pwd)/kirimtele" /usr/local/bin/kirimtele
-   sudo ln -sf "$(pwd)/terimatele.py" /usr/local/bin/terimatele
-   sudo ln -sf "$(pwd)/hapustele.py" /usr/local/bin/hapustele
-   ```
+## ⚙️ Konfigurasi
 
-## ⚙️ Konfigurasi Awal
+Saat pertama kali menjalankan `kirimtele`, script akan memandu Anda mengisi:
+1.  **Bot Token**: Dari [@BotFather](https://t.me/BotFather).
+2.  **Chat ID**: Dari [@userinfobot](https://t.me/userinfobot).
 
-Saat pertama kali Anda menjalankan `kirimtele`, script akan meminta:
-1.  **Bot Token**: Buat bot baru di [@BotFather](https://t.me/BotFather) (`/newbot`).
-2.  **Chat ID**: Cek di [@userinfobot](https://t.me/userinfobot) atau undang bot ke grup Anda.
+Konfigurasi disimpan di file `config` di dalam direktori instalasi script.
 
-Data ini disimpan di `~/.telechat_rc`.
+## 🚀 Cara Penggunaan
 
-## 🚀 Penggunaan
+### 1. Mengirim File / Pesan (`kirimtele`)
 
-### 1. Mengirim File (`kirimtele`)
+**Mode Interaktif (Paling Mudah):**
+Ketik `kirimtele` tanpa argumen, lalu **Drag & Drop** file ke terminal.
 ```bash
+kirimtele
+# Output:
+# 💡 Tips: Anda bisa Drag & Drop file ke terminal sekarang.
+# 📂 Masukkan path file (atau ketik pesan): /home/user/file1.pdf /home/user/file2.pdf Ini captionnya
+```
+*Script otomatis mendeteksi mana yang file dan mana yang teks/caption.*
+
+**Mode Manual (CLI Arguments):**
+```bash
+# Kirim satu file
 kirimtele dokumen.pdf
-kirimtele foto.jpg "Caption foto"
+
+# Kirim file dengan caption
+kirimtele foto.jpg "Liburan kemarin"
+
+# Kirim pesan teks saja
+kirimtele "Halo, ini pesan dari terminal"
 ```
 
 ### 2. Menerima File (`terimatele`)
 ```bash
 terimatele
 ```
-File yang dikirim ke bot akan otomatis terdownload ke folder aktif Anda.
+*   Script akan *standby*.
+*   Kirim file ke bot Telegram Anda.
+*   File otomatis terdownload ke folder terminal yang sedang aktif.
 
 ### 3. Menghapus Pesan (`hapustele`)
-Fitur ini sangat berguna untuk menarik kembali file yang salah kirim atau membersihkan history chat.
+Tarik pesan salah kirim atau bersihkan chat.
 
-*   **Mode Interaktif (Seamless):**
-    Cukup ketik `hapustele`, maka daftar pesan terakhir akan muncul. Ketik ID-nya untuk menghapus.
-    ```bash
-    hapustele
-    ```
+**Mode Interaktif:**
+```bash
+hapustele
+```
+Akan muncul daftar riwayat. Anda bisa:
+*   Ketik satu ID: `1234`
+*   Ketik banyak ID: `1234 1235 1236`
+*   Ketik `all` untuk hapus semua.
 
-*   **Hapus Semua:**
-    Menghapus semua pesan yang tercatat di riwayat lokal.
-    ```bash
-    hapustele --all
-    ```
+**Mode Cepat (CLI):**
+```bash
+hapustele --id 12345        # Hapus satu pesan
+hapustele --all             # Hapus SEMUA riwayat lokal & remote
+```
 
-*   **Hapus ID Spesifik:**
-    ```bash
-    hapustele --id 12345
-    ```
-
-## 🔄 Reset Konfigurasi
-Jika ingin mengganti bot atau Chat ID:
+## 🔄 Reset / Uninstall
+Untuk mereset konfigurasi (ganti bot):
 ```bash
 kirimtele --reset
 ```
 
-## 🛡️ Privasi & Keamanan
-*   Token & Chat ID disimpan lokal di komputer Anda.
-*   `terimatele` memfilter pengirim, hanya Chat ID yang terdaftar yang bisa mengirim file ke laptop Anda.
+## 🛡️ Keamanan
+*   Token disimpan lokal di folder script.
+*   `terimatele` memvalidasi `Chat ID` pengirim, sehingga orang lain tidak bisa mengirim file ke komputer Anda melalui bot ini.
 
 ---
 *Dibuat dengan ❤️ dan Python/Bash.*

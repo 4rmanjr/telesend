@@ -46,14 +46,21 @@ def get_history():
             chat_id = None
             
             # Parsing format history
+            # Format: ID|TS|FILENAME|CHAT_ID
             if '|' in line:
                 parts = line.split('|')
                 msg_id = parts[0]
                 timestamp = float(parts[1])
-                filename = parts[2] if len(parts) > 2 else "Tidak diketahui"
-                # Ambil Chat ID jika ada (format baru)
+                
+                # Logic parsing filename & chat_id yang lebih robust
                 if len(parts) > 3:
-                    chat_id = parts[3]
+                    # Asumsi format baru: elemen terakhir adalah chat_id
+                    chat_id = parts[-1]
+                    # Sisanya di tengah adalah filename (jika filename mengandung pipe yang lolos sanitasi)
+                    filename = "|".join(parts[2:-1])
+                else:
+                    # Format legacy tanpa chat_id: ID|TS|FILENAME
+                    filename = "|".join(parts[2:])
             else:
                 # Format legacy (spasi)
                 parts = line.split()
@@ -65,7 +72,7 @@ def get_history():
                 'id': msg_id,
                 'ts': timestamp,
                 'file': os.path.basename(filename),
-                'chat_id': chat_id, # Bisa None jika format lama
+                'chat_id': chat_id, 
                 'raw_line': line
             })
     except Exception:
@@ -89,6 +96,7 @@ def delete_message(token, chat_id, message_id):
         else:
             desc = data.get('description')
             print(f"⚠️  Gagal menghapus pesan {message_id}: {desc}")
+            # Jika pesan tidak ditemukan (sudah terhapus), anggap sukses agar dihapus dari history
             if "message to delete not found" in str(desc).lower():
                 return True
             return False
@@ -102,13 +110,18 @@ def show_list(entries, default_chat_id):
     print(f"{ 'ID Pesan':<10} | {'Chat ID':<15} | {'Waktu':<18} | {'Nama File'}")
     print("-" * 85)
     
-    for entry in reversed(entries):
+    # Tampilkan 20 entri terakhir saja agar tidak terlalu panjang
+    limit = 20
+    display_entries = entries[-limit:]
+    
+    for entry in reversed(display_entries):
         dt = datetime.datetime.fromtimestamp(entry['ts']).strftime('%Y-%m-%d %H:%M')
-        # Gunakan Chat ID dari history jika ada, kalau tidak pakai default config
         display_chat_id = entry['chat_id'] if entry['chat_id'] else f"{default_chat_id} (Def)"
         
         print(f"{entry['id']:<10} | {display_chat_id:<15} | {dt:<18} | {entry['file']}")
     print("-" * 85)
+    if len(entries) > limit:
+        print(f"... (dan {len(entries) - limit} pesan lama lainnya)")
 
 def main():
     parser = argparse.ArgumentParser(description="Hapus pesan Telegram.")
@@ -122,13 +135,11 @@ def main():
 
     entries = get_history()
 
-    # Fungsi helper untuk menentukan Chat ID yang dipakai
     def resolve_chat_id(entry):
         return entry['chat_id'] if entry['chat_id'] else DEFAULT_CHAT_ID
 
     # 1. Mode Hapus ID Spesifik (via argumen)
     if args.id:
-        # Cari entry untuk ID ini agar tahu Chat ID-nya
         target = next((e for e in entries if str(e['id']) == str(args.id)), None)
         target_chat_id = resolve_chat_id(target) if target else DEFAULT_CHAT_ID
         
@@ -162,7 +173,9 @@ def main():
 
     show_list(entries, DEFAULT_CHAT_ID)
     
-    print("\n💡 Ketik ID pesan untuk menghapus, atau 'all' untuk hapus semua.")
+    print("\n💡 Ketik ID pesan untuk menghapus.")
+    print("   Bisa input banyak ID dipisah spasi (contoh: 123 124 125).")
+    print("   Atau ketik 'all' untuk hapus semua.")
     choice = input("👉 Pilihan (Enter untuk batal): ").strip()
 
     if not choice:
@@ -172,15 +185,27 @@ def main():
     if choice.lower() == 'all':
         os.system(f"{sys.argv[0]} --all")
     else:
-        target = next((e for e in entries if str(e['id']) == choice), None)
-        target_chat_id = resolve_chat_id(target) if target else DEFAULT_CHAT_ID
+        # Support multiple IDs separated by space or comma
+        ids_to_delete = choice.replace(',', ' ').split()
         
-        if delete_message(TOKEN, target_chat_id, choice):
-            new_entries = [e for e in entries if str(e['id']) != choice]
-            save_history(new_entries)
-            print("\n💡 Tips: File terhapus. Mau kirim revisi? Ketik \033[1;33mkirimtele <file>\033[0m")
-        elif not target:
-             delete_message(TOKEN, DEFAULT_CHAT_ID, choice)
+        updated_entries = list(entries) # Copy list
+        changes_made = False
+        
+        for msg_id in ids_to_delete:
+            target = next((e for e in updated_entries if str(e['id']) == msg_id), None)
+            
+            if target:
+                target_chat_id = resolve_chat_id(target)
+                if delete_message(TOKEN, target_chat_id, msg_id):
+                    updated_entries = [e for e in updated_entries if str(e['id']) != msg_id]
+                    changes_made = True
+            else:
+                # Coba hapus meski tidak ada di history (mungkin input manual ID)
+                print(f"⚠️  ID {msg_id} tidak ada di history lokal, mencoba hapus remote...")
+                if delete_message(TOKEN, DEFAULT_CHAT_ID, msg_id):
+                    changes_made = True
 
-if __name__ == "__main__":
-    main()
+        if changes_made:
+            save_history(updated_entries)
+            print("\n✅ Penghapusan selesai.")
+            print("💡 Tips: Mau kirim revisi? Ketik \033[1;33mkirimtele <file>\033[0m")
