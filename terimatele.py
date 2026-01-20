@@ -122,13 +122,16 @@ def main():
                     else:
                         print("   ❌ Gagal mengambil path file.")
         
+        except requests.exceptions.ConnectionError:
+            print("\r⚠️  Gagal terhubung ke server Telegram (Masalah Koneksi/DNS). Mencoba lagi dalam 5 detik...  ", end="", flush=True)
+            time.sleep(5)
         except KeyboardInterrupt:
             print("\n🛑 Berhenti.")
             print("\n💡 Tips: Mau membalas/mengirim file? Gunakan perintah:")
             print("   \033[1;33mkirimtele <nama_file>\033[0m")
             break
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"\n❌ Error: {e}")
             time.sleep(3)
 
 if __name__ == "__main__":
