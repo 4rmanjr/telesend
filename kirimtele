@@ -33,6 +33,38 @@ if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
 
+# Cek dependensi: curl
+if ! command -v curl &> /dev/null; then
+    echo "❌ Error: 'curl' tidak ditemukan."
+    
+    # Deteksi distro
+    install_cmd="sudo apt update && sudo apt install -y curl"
+    if [ -f /etc/os-release ]; then
+        os_info=$(cat /etc/os-release | tr '[:upper:]' '[:lower:]')
+        if [[ "$os_info" == *"arch"* ]] || [[ "$os_info" == *"cachy"* ]]; then
+            install_cmd="sudo pacman -S --noconfirm curl"
+        elif [[ "$os_info" == *"fedora"* ]]; then
+            install_cmd="sudo dnf install -y curl"
+        fi
+    fi
+
+    read -p "❓ Ingin menginstallnya secara otomatis? (y/n): " confirm
+    if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+        echo "🚀 Menjalankan: $install_cmd"
+        eval $install_cmd
+        if command -v curl &> /dev/null; then
+            echo "✅ Berhasil menginstall 'curl'."
+        else
+            echo "❌ Gagal menginstall. Silakan install manual."
+            exit 1
+        fi
+    else
+        echo "💡 Silakan install secara manual dengan:"
+        echo "   $install_cmd"
+        exit 1
+    fi
+fi
+
 # Cek config
 if [ -z "$TOKEN" ] || [[ "$TOKEN" == *"GANTI_DENGAN"* ]]; then
     setup_config

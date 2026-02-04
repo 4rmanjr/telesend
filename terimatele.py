@@ -1,7 +1,45 @@
 #!/usr/bin/env python3
 import os
+import sys
 import time
-import requests
+
+# Pengecekan Dependency
+try:
+    import requests
+except ImportError:
+    print("❌ Error: Library 'requests' tidak ditemukan.")
+    
+    # Deteksi distro
+    install_cmd = "pip install requests"
+    is_system_pkg = False
+    if os.path.exists("/etc/os-release"):
+        with open("/etc/os-release") as f:
+            os_info = f.read().lower()
+            if "arch" in os_info or "cachy" in os_info:
+                install_cmd = "sudo pacman -S --noconfirm python-requests"
+                is_system_pkg = True
+            elif "debian" in os_info or "ubuntu" in os_info:
+                install_cmd = "sudo apt update && sudo apt install -y python3-requests"
+                is_system_pkg = True
+            elif "fedora" in os_info:
+                install_cmd = "sudo dnf install -y python3-requests"
+                is_system_pkg = True
+    
+    confirm = input(f"❓ Ingin menginstallnya secara otomatis? (y/n): ").lower()
+    if confirm == 'y':
+        print(f"🚀 Menjalankan: {install_cmd}")
+        os.system(install_cmd)
+        # Cek ulang setelah install
+        try:
+            import requests
+            print("✅ Berhasil menginstall library 'requests'.")
+        except ImportError:
+            print("❌ Gagal menginstall. Silakan install manual.")
+            sys.exit(1)
+    else:
+        print(f"💡 Silakan install secara manual dengan:\n   {install_cmd}")
+        sys.exit(1)
+
 import json
 import datetime
 
