@@ -122,6 +122,11 @@ Untuk mereset konfigurasi (ganti bot):
 kirimtele --reset
 ```
 
+Untuk menghapus script dari system:
+```bash
+rm ~/.local/bin/kirimtele ~/.local/bin/terimatele ~/.local/bin/hapustele
+```
+
 ## 🛡️ Keamanan
 *   Token disimpan lokal di folder script.
 *   `terimatele` memvalidasi `Chat ID` pengirim, sehingga orang lain tidak bisa mengirim file ke komputer Anda melalui bot ini.
