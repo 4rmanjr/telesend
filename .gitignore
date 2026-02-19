@@ -1,0 +1,4 @@
+config
+config.backup
+*.log
+__pycache__/
